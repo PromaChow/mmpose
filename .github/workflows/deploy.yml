@@ -1,22 +1,60 @@
 name: deploy
-
-on: push
+on:
+  push:
+    branches:
+      - main
 
 jobs:
   build-n-publish:
-    runs-on: ubuntu-latest
     if: startsWith(github.event.ref, 'refs/tags')
+    runs-on: ubuntu-latest
     steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
       - uses: actions/checkout@v2
       - name: Set up Python 3.7
         uses: actions/setup-python@v2
         with:
           python-version: 3.7
       - name: Build MMPose
-        run: |
-          pip install wheel
+        run: 'pip install wheel
+
           python setup.py sdist bdist_wheel
+
+          '
+      - id: measurement-4
+        name: Record Measurement After Build MMPose
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Build MMPose
+          task: get-measurement
       - name: Publish distribution to PyPI
-        run: |
-          pip install twine
+        run: 'pip install twine
+
           twine upload dist/* -u __token__ -p ${{ secrets.pypi_password }}
+
+          '
+      - id: measurement-6
+        name: Record Measurement After Publish distribution to PyPI
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Publish distribution to PyPI
+          task: get-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json

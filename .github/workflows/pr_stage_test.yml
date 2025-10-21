@@ -1,29 +1,21 @@
 name: pr_stage_test
-
 on:
-  pull_request:
-    paths-ignore:
-      - 'README.md'
-      - 'README_zh-CN.md'
-      - 'docs/**'
-      - 'demo/**'
-      - '.dev_scripts/**'
-      - '.circleci/**'
+  push:
+    branches:
+      - main
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
+  group: ${{ github.workflow }}-${{ github.ref }}
 jobs:
   build_cpu:
-    runs-on: ubuntu-22.04
-    strategy:
-      matrix:
-        python-version: [3.7]
-        include:
-          - torch: 1.8.1
-            torchvision: 0.9.1
+    runs-on: ubuntu-latest
     steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
       - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
@@ -31,47 +23,124 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Upgrade pip
         run: pip install pip --upgrade
+      - id: measurement-4
+        name: Record Measurement After Upgrade pip
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Upgrade pip
+          task: get-measurement
       - name: Install Numpy
         run: pip install -U numpy
+      - id: measurement-6
+        name: Record Measurement After Install Numpy
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Install Numpy
+          task: get-measurement
       - name: Install PyTorch
-        run: pip install torch==${{matrix.torch}}+cpu torchvision==${{matrix.torchvision}}+cpu -f https://download.pytorch.org/whl/torch_stable.html
+        run: pip install torch==${{matrix.torch}}+cpu torchvision==${{matrix.torchvision}}+cpu
+          -f https://download.pytorch.org/whl/torch_stable.html
+      - id: measurement-8
+        name: Record Measurement After Install PyTorch
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Install PyTorch
+          task: get-measurement
       - name: Install mmpose dependencies
-        run: |
-          python -m pip install --upgrade pip setuptools wheel
+        run: 'python -m pip install --upgrade pip setuptools wheel
+
           pip install -U numpy
+
           pip install git+https://github.com/open-mmlab/mmengine.git@main
+
           pip install -U openmim
-          mim install 'mmcv >= 2.0.0'
+
+          mim install ''mmcv >= 2.0.0''
+
           pip install git+https://github.com/open-mmlab/mmdetection.git@dev-3.x
+
           pip install -r requirements/tests.txt
+
           pip install -r requirements/runtime.txt
+
           pip install -r requirements/albu.txt
+
           pip install -r requirements/poseval.txt
+
+          '
+      - id: measurement-10
+        name: Record Measurement After Install mmpose dependencies
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Install mmpose dependencies
+          task: get-measurement
       - name: Build and install
         run: rm -rf .eggs && pip install -e .
+      - id: measurement-12
+        name: Record Measurement After Build and install
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Build and install
+          task: get-measurement
       - name: Run unittests and generate coverage report
-        run: |
-          coverage run --branch --source mmpose -m pytest tests/
+        run: 'coverage run --branch --source mmpose -m pytest tests/
+
           coverage xml
+
           coverage report -m
-      # Upload coverage report for python3.7 && pytorch1.8.1 cpu
+
+          '
+        continue-on-error: true
+      - id: measurement-14
+        name: Record Measurement After Run unittests and generate coverage report
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Run unittests and generate coverage report
+          task: get-measurement
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v1.0.14
         with:
+          env_vars: OS,PYTHON
+          fail_ci_if_error: false
           file: ./coverage.xml
           flags: unittests
-          env_vars: OS,PYTHON
           name: codecov-umbrella
-          fail_ci_if_error: false
-
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
+    strategy:
+      matrix:
+        include:
+          - torch: 1.8.1
+            torchvision: 0.9.1
+        python-version:
+          - 3.7
   build_cu102:
-    runs-on: ubuntu-22.04
     container:
       image: pytorch/pytorch:1.8.1-cuda10.2-cudnn7-devel
-    strategy:
-      matrix:
-        python-version: [3.7]
+    runs-on: ubuntu-latest
     steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
       - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
@@ -79,44 +148,129 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Upgrade pip
         run: pip install pip --upgrade
+      - id: measurement-4
+        name: Record Measurement After Upgrade pip
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Upgrade pip
+          task: get-measurement
       - name: Fetch GPG keys
-        run: |
-          apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/3bf863cc.pub
+        run: 'apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/3bf863cc.pub
+
           apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1804/x86_64/7fa2af80.pub
-      - name: Install Python-dev
+
+          '
+        continue-on-error: true
+      - id: measurement-6
+        name: Record Measurement After Fetch GPG keys
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Fetch GPG keys
+          task: get-measurement
+      - if: ${{matrix.python-version != 3.9}}
+        name: Install Python-dev
         run: apt-get update && apt-get install -y python${{matrix.python-version}}-dev
-        if: ${{matrix.python-version != 3.9}}
+      - id: measurement-8
+        name: Record Measurement After Install Python-dev
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Install Python-dev
+          task: get-measurement
       - name: Install system dependencies
-        run: |
-          apt-get update
+        run: 'apt-get update
+
           apt-get install -y ffmpeg libsm6 libxext6 git ninja-build libglib2.0-0 libxrender-dev
+
+          '
+      - id: measurement-10
+        name: Record Measurement After Install system dependencies
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Install system dependencies
+          task: get-measurement
       - name: Install mmpose dependencies
-        run: |
-          pip install -U numpy
+        run: 'pip install -U numpy
+
           pip install git+https://github.com/open-mmlab/mmengine.git@main
+
           pip install -U openmim
-          mim install 'mmcv >= 2.0.0'
+
+          mim install ''mmcv >= 2.0.0''
+
           pip install git+https://github.com/open-mmlab/mmdetection.git@dev-3.x
+
           pip install -r requirements/tests.txt
+
           pip install -r requirements/runtime.txt
+
           pip install -r requirements/albu.txt
+
           pip install -r requirements/poseval.txt
+
+          '
+      - id: measurement-12
+        name: Record Measurement After Install mmpose dependencies
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Install mmpose dependencies
+          task: get-measurement
       - name: Build and install
         run: rm -rf .eggs && pip install -e .
+      - id: measurement-14
+        name: Record Measurement After Build and install
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Build and install
+          task: get-measurement
       - name: Run unittests and generate coverage report
-        run: |
-          coverage run --branch --source mmpose -m pytest tests/
+        run: 'coverage run --branch --source mmpose -m pytest tests/
+
           coverage xml
+
           coverage report -m
 
+          '
+        continue-on-error: true
+      - id: measurement-16
+        name: Record Measurement After Run unittests and generate coverage report
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Run unittests and generate coverage report
+          task: get-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
+    strategy:
+      matrix:
+        python-version:
+          - 3.7
   build_cu117:
-    runs-on: ubuntu-22.04
     container:
       image: pytorch/pytorch:2.0.0-cuda11.7-cudnn8-devel
-    strategy:
-      matrix:
-        python-version: [3.9]
+    runs-on: ubuntu-latest
     steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
       - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
@@ -124,46 +278,114 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Upgrade pip
         run: pip install pip --upgrade
+      - id: measurement-4
+        name: Record Measurement After Upgrade pip
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Upgrade pip
+          task: get-measurement
       - name: Fetch GPG keys
-        run: |
-          apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/3bf863cc.pub
+        run: 'apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/3bf863cc.pub
+
           apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1804/x86_64/7fa2af80.pub
+
+          '
+        continue-on-error: true
+      - id: measurement-6
+        name: Record Measurement After Fetch GPG keys
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Fetch GPG keys
+          task: get-measurement
       - name: Install system dependencies
-        run: apt-get update && apt-get install -y ffmpeg libsm6 libxext6 git ninja-build libglib2.0-0 libxrender-dev
+        run: apt-get update && apt-get install -y ffmpeg libsm6 libxext6 git ninja-build
+          libglib2.0-0 libxrender-dev
+      - id: measurement-8
+        name: Record Measurement After Install system dependencies
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Install system dependencies
+          task: get-measurement
       - name: Install mmpose dependencies
-        run: |
-          pip install -U numpy
+        run: 'pip install -U numpy
+
           pip install git+https://github.com/open-mmlab/mmengine.git@main
+
           pip install -U openmim
-          mim install 'mmcv >= 2.0.0'
+
+          mim install ''mmcv >= 2.0.0''
+
           pip install git+https://github.com/open-mmlab/mmdetection.git@dev-3.x
+
           pip install -r requirements/tests.txt
+
           pip install -r requirements/runtime.txt
+
           pip install -r requirements/albu.txt
+
           pip install -r requirements/poseval.txt
+
+          '
+      - id: measurement-10
+        name: Record Measurement After Install mmpose dependencies
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Install mmpose dependencies
+          task: get-measurement
       - name: Build and install
         run: rm -rf .eggs && pip install -e .
+      - id: measurement-12
+        name: Record Measurement After Build and install
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Build and install
+          task: get-measurement
       - name: Run unittests and generate coverage report
-        run: |
-          coverage run --branch --source mmpose -m pytest tests/
+        run: 'coverage run --branch --source mmpose -m pytest tests/
+
           coverage xml
+
           coverage report -m
 
-  build_windows:
-    runs-on: windows-2022
+          '
+        continue-on-error: true
+      - id: measurement-14
+        name: Record Measurement After Run unittests and generate coverage report
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Run unittests and generate coverage report
+          task: get-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
     strategy:
       matrix:
-        os: [windows-2022]
-        python: [3.7]
-        platform: [cpu, cu111]
-        torch: [1.8.1]
-        torchvision: [0.9.1]
-        include:
-          - python-version: 3.8
-            platform: cu117
-            torch: 2.0.0
-            torchvision: 0.15.1
+        python-version:
+          - 3.9
+  build_windows:
+    runs-on: windows-2022
     steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: start-measurement
       - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
@@ -171,24 +393,110 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Upgrade pip
         run: python -m pip install pip --upgrade
+      - id: measurement-4
+        name: Record Measurement After Upgrade pip
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Upgrade pip
+          task: get-measurement
       - name: Install lmdb
         run: python -m pip install lmdb
+      - id: measurement-6
+        name: Record Measurement After Install lmdb
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Install lmdb
+          task: get-measurement
       - name: Install PyTorch
-        run: python -m pip install torch==${{matrix.torch}}+${{matrix.platform}} torchvision==${{matrix.torchvision}}+${{matrix.platform}} -f https://download.pytorch.org/whl/${{matrix.platform}}/torch_stable.html
+        run: python -m pip install torch==${{matrix.torch}}+${{matrix.platform}} torchvision==${{matrix.torchvision}}+${{matrix.platform}}
+          -f https://download.pytorch.org/whl/${{matrix.platform}}/torch_stable.html
+      - id: measurement-8
+        name: Record Measurement After Install PyTorch
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Install PyTorch
+          task: get-measurement
       - name: Install mmpose dependencies
-        run: |
-          python -m pip install -U numpy
+        run: 'python -m pip install -U numpy
+
           python -m pip install --upgrade pip setuptools wheel
+
           python -m pip install git+https://github.com/open-mmlab/mmengine.git@main
+
           python -m pip install -U openmim
-          mim install 'mmcv >= 2.0.0'
+
+          mim install ''mmcv >= 2.0.0''
+
           mim install git+https://github.com/open-mmlab/mmdetection.git@dev-3.x
+
           python -m pip install -r requirements/tests.txt
+
           python -m pip install -r requirements/albu.txt
+
           python -m pip install -r requirements/poseval.txt
+
+          '
+      - id: measurement-10
+        name: Record Measurement After Install mmpose dependencies
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Install mmpose dependencies
+          task: get-measurement
       - name: Build and install
-        run: |
-          python -m pip install -e . -v
+        run: 'python -m pip install -e . -v
+
+          '
+      - id: measurement-12
+        name: Record Measurement After Build and install
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Build and install
+          task: get-measurement
       - name: Run unittests and generate coverage report
-        run: |
-          pytest tests/
+        run: 'pytest tests/
+
+          '
+        continue-on-error: true
+      - id: measurement-14
+        name: Record Measurement After Run unittests and generate coverage report
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          label: Run unittests and generate coverage report
+          task: get-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@862050e4f01f65b1436e5eca18ba4bd85562f0de
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
+    strategy:
+      matrix:
+        include:
+          - platform: cu117
+            python-version: 3.8
+            torch: 2.0.0
+            torchvision: 0.15.1
+        os:
+          - ubuntu-latest
+        platform:
+          - cpu
+          - cu111
+        python:
+          - 3.7
+        torch:
+          - 1.8.1
+        torchvision:
+          - 0.9.1
